@@ -2,16 +2,30 @@
 
 **Deterministic Policy Engine & Verification Guardrails for Autonomous Agent Actions**
 
-[![Status](https://img.shields.io/badge/Status-Verified_Live-success)](#)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](#)
-[![Integrations](https://img.shields.io/badge/Integrations-Gmail%20%7C%20Slack%20%7C%20Linear-blueviolet)](#)
-[![Evaluation](https://img.shields.io/badge/Benchmark-12%2F12%20Passed%20(100%25)-brightgreen)](#)
+![Status](https://img.shields.io/badge/Status-Verified_Live-success)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Integrations](https://img.shields.io/badge/Integrations-Gmail%20%7C%20Slack%20%7C%20Linear-blueviolet)
+![Evaluation](https://img.shields.io/badge/Benchmark-12%2F12%20Passed%20(100%25)-brightgreen)
+
+**[▶ Watch the 2-Minute Demo](https://drive.google.com/file/d/1lmqHJocGLsvJxgWUkJYJKLFMvZppJAMp/view?usp=sharing)**
 
 Most AI agents that take real-world actions (sending emails, issuing refunds, creating tickets) fail in two invisible ways: they act on requests they shouldn't, or they assume an action succeeded when the underlying API call silently failed.
 
 AgentLens Guardian is a runtime control layer that sits between an autonomous agent and the tools it uses. The agent proposes an action; a deterministic policy engine decides whether it's allowed based on confidence and hard risk invariants — not the model's own self-assessment; and an independent post-action verification layer confirms the external system actually changed state, triggering an automatic fallback if it didn't.
 
 We demonstrate this with a customer-support agent that reads incoming Gmail requests, evaluates them, and routes each one into one of three operational tiers, with live integrations across Gmail, Slack, and Linear.
+
+---
+
+## Demo Video
+
+**[https://drive.google.com/file/d/1lmqHJocGLsvJxgWUkJYJKLFMvZppJAMp/view?usp=sharing](https://drive.google.com/file/d/1lmqHJocGLsvJxgWUkJYJKLFMvZppJAMp/view?usp=sharing)**
+
+The demo walks through all four decision paths live against real Gmail, Slack, and Linear accounts:
+1. **AUTONOMOUS** — high-confidence, low-risk request → auto-reply + Slack log
+2. **GUARDED** — moderate-confidence request → paused for human approval in Slack
+3. **BLOCKED (identity mismatch)** → sender doesn't match account on file → Linear escalation
+4. **BLOCKED (financial + security, with simulated failure recovery)** → 95% confidence still blocked by a deterministic policy override; a simulated Linear API failure is caught by post-action verification and automatically falls back to an emergency Slack alert
 
 ---
 
@@ -120,7 +134,7 @@ Every evaluation decision is recorded as a structured JSON object appended to `d
 
 A cumulative run summary can be posted to Slack on demand (see Quickstart):
 
-```text
+```
 📊 AgentLens Guardian run summary
 • AUTONOMOUS: 1
 • GUARDED: 1
@@ -136,7 +150,7 @@ A cumulative run summary can be posted to Slack on demand (see Quickstart):
 
 Copy `.env.example` to `.env` and provide your credentials:
 
-```env
+```
 GMAIL_ADDRESS=your_email@gmail.com
 GMAIL_APP_PASSWORD=your_16_char_app_password
 SLACK_BOT_TOKEN=xoxb-...
@@ -148,22 +162,25 @@ ACCOUNT_EMAIL_ON_FILE=your_email@gmail.com
 
 ### 2. Run Pipeline
 
-- **Normal Mode**:
-  ```bash
-  python pipeline.py --subject "Order delayed"
-  ```
-- **Simulate Downstream Failure (Recovery Beat)**:
-  ```bash
-  python pipeline.py --simulate-failure --subject "charged twice"
-  ```
-- **Run Benchmark Suite**:
-  ```bash
-  python eval_scenarios.py
-  ```
-- **Post Cumulative Slack Summary** (after a batch run):
-  ```bash
-  python pipeline.py --summary
-  ```
+**Normal Mode**:
+```bash
+python pipeline.py --subject "Order delayed"
+```
+
+**Simulate Downstream Failure (Recovery Beat)**:
+```bash
+python pipeline.py --simulate-failure --subject "charged twice"
+```
+
+**Run Benchmark Suite**:
+```bash
+python eval_scenarios.py
+```
+
+**Post Cumulative Slack Summary** (after a batch run):
+```bash
+python pipeline.py --summary
+```
 
 ---
 
