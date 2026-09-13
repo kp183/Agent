@@ -14,6 +14,8 @@ import email
 from email.header import decode_header
 from email.message import EmailMessage
 from email.utils import parseaddr
+import json
+from datetime import datetime, timezone
 import requests
 from dotenv import load_dotenv
 from slack_sdk import WebClient
@@ -43,6 +45,49 @@ from guardian import (
 ACCOUNT_EMAIL_ON_FILE = os.getenv("ACCOUNT_EMAIL_ON_FILE", "aditi.sharma@example.com")
 
 LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
+DECISIONS_LOG_PATH = os.getenv("DECISIONS_LOG_PATH", "decisions.jsonl")
+
+
+def log_decision(entry: dict, log_path: str = DECISIONS_LOG_PATH) -> None:
+    """Appends an evaluation decision record to structured JSONL log."""
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        print(f"[LOGGED] Decision recorded to {log_path}")
+    except Exception as exc:
+        print(f"[WARNING] Failed to write decision log: {exc}")
+
+
+def get_decision_summary_counts(log_path: str = DECISIONS_LOG_PATH) -> dict:
+    """Reads decisions.jsonl and calculates decision counts across runs."""
+    counts = {
+        "AUTONOMOUS": 0,
+        "GUARDED": 0,
+        "BLOCKED": 0,
+        "RECOVERED": 0,
+    }
+    if not os.path.exists(log_path):
+        return counts
+
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    tier = record.get("tier")
+                    if tier in counts:
+                        counts[tier] += 1
+                    if record.get("post_action_verification") == "TRIGGERED_FALLBACK":
+                        counts["RECOVERED"] += 1
+                except json.JSONDecodeError:
+                    continue
+    except Exception as exc:
+        print(f"[WARNING] Failed to parse {log_path}: {exc}")
+
+    return counts
 
 
 def decode_mime_header(header_value: str | None) -> str:
@@ -392,6 +437,8 @@ def run_pipeline(
     print(f"Reasoning:        {evaluation.reasoning}")
     print("---------------------------\n")
 
+    verification_status = "N/A"
+
     # Step 3: Tier-Based Execution & Verification
     if evaluation.tier == ActionTier.AUTONOMOUS:
         print("[TIER: AUTONOMOUS] Executing autonomous resolution...")
@@ -447,6 +494,7 @@ def run_pipeline(
 
         # Step 4: Post-Action Verification & Fallback Recovery
         if verify_linear_creation(issue_result):
+            verification_status = "SUCCEEDED"
             issue_url = issue_result.get("url", "")
             issue_identifier = issue_result.get("identifier", "Ticket")
             slack_msg = (
@@ -459,6 +507,7 @@ def run_pipeline(
             )
             post_slack_message(slack_msg)
         else:
+            verification_status = "TRIGGERED_FALLBACK"
             # FALLBACK RECOVERY: Critical beat of the demo
             print("[RECOVERY] Triggering emergency engineering fallback notification...")
             urgent_slack_msg = (
@@ -471,6 +520,33 @@ def run_pipeline(
                 f"• *Escalation:* Direct bypass alert sent to Engineering On-Call Slack channel."
             )
             post_slack_message(urgent_slack_msg)
+
+    # Step 5: Structured Logging to decisions.jsonl
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "email_subject": subject,
+        "email_snippet": body[:120].strip() + ("..." if len(body) > 120 else ""),
+        "sender_email": sender,
+        "confidence_score": evaluation.confidence_score,
+        "risk_level": evaluation.risk_level,
+        "policy_flags": evaluation.policy_flags,
+        "tier": evaluation.tier.value,
+        "reasoning": evaluation.reasoning,
+        "post_action_verification": verification_status,
+    }
+    log_decision(log_entry)
+
+    # Step 6: Post Cumulative Decision Summary to Slack
+    counts = get_decision_summary_counts()
+    summary_text = (
+        "📊 *AgentLens Guardian run summary*\n"
+        f"• *AUTONOMOUS:* {counts['AUTONOMOUS']}\n"
+        f"• *GUARDED:* {counts['GUARDED']}\n"
+        f"• *BLOCKED:* {counts['BLOCKED']}\n"
+        f"• *Silent failures recovered:* {counts['RECOVERED']}"
+    )
+    print("\n[STEP] Posting decision summary to Slack...")
+    post_slack_message(summary_text)
 
     print("\n" + "=" * 80)
     print("                   Pipeline Execution Completed Successfully                    ")
