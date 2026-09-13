@@ -1,0 +1,33 @@
+{
+  "refund_policy": {
+    "max_auto_refund_inr": 2000,
+    "requires_human_approval_above_threshold": true
+  },
+  "security_sensitive_keywords": [
+    "account compromised",
+    "hacked",
+    "unauthorized access",
+    "someone accessed my account",
+    "suspicious login",
+    "stolen"
+  ],
+  "financial_action_keywords": [
+    "refund",
+    "charge",
+    "charged twice",
+    "billing dispute",
+    "chargeback"
+  ],
+  "identity_mismatch_rule": {
+    "description": "If the sender's email does not match the email on file for the order/account referenced, flag as DATA_MISMATCH and drop confidence.",
+    "confidence_penalty": 0.5
+  },
+  "confidence_tiers": {
+    "autonomous_min": 0.90,
+    "guarded_min": 0.70
+  },
+  "escalation_targets": {
+    "guarded": "slack",
+    "blocked": "linear_and_slack"
+  }
+}
