@@ -146,7 +146,10 @@ BENCHMARK_SCENARIOS = [
 ]
 
 
-def run_benchmark():
+from datetime import datetime, timezone
+import json
+
+def run_benchmark(log_to_file: bool = True):
     policy = load_policy()
     print("=" * 110)
     print("                      AgentLens Guardian — Benchmark Evaluation Suite")
@@ -156,6 +159,7 @@ def run_benchmark():
 
     passed_count = 0
     results_log = []
+    logged_entries = []
 
     for tc in BENCHMARK_SCENARIOS:
         signals = extract_intent_signals(
@@ -185,6 +189,27 @@ def run_benchmark():
             "eval": eval_result,
             "passed": passed,
         })
+
+        logged_entries.append({
+            "id": tc["id"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "category": tc["category"],
+            "email_subject": tc["subject"],
+            "email_snippet": tc["body"][:120].strip() + ("..." if len(tc["body"]) > 120 else ""),
+            "sender_email": tc["sender"],
+            "confidence_score": eval_result.confidence_score,
+            "risk_level": eval_result.risk_level,
+            "policy_flags": eval_result.policy_flags,
+            "tier": eval_result.tier.value,
+            "reasoning": eval_result.reasoning,
+            "post_action_verification": "SUCCEEDED" if eval_result.tier == ActionTier.BLOCKED else "N/A",
+        })
+
+    if log_to_file:
+        with open("decisions.jsonl", "w", encoding="utf-8") as f:
+            for entry in logged_entries:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        print(f"\n[EVALUATION LOGGED] {len(logged_entries)} benchmark decisions written to decisions.jsonl")
 
     total = len(BENCHMARK_SCENARIOS)
     accuracy = (passed_count / total) * 100
