@@ -99,8 +99,10 @@ def extract_intent_signals(
         confidence -= penalty
 
     word_count = len(full_text.split())
-    if word_count < 15:
-        confidence -= 0.3
+    if word_count < 8:
+        confidence -= 0.35  # very vague / incomplete (< 8 words)
+    elif word_count < 20:
+        confidence -= 0.15  # brief / ambiguous inquiry (8-19 words) -> lands in GUARDED band [0.70, 0.90)
 
     base_confidence = round(max(0.0, min(1.0, confidence)), 2)
 
