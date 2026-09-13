@@ -29,38 +29,36 @@ Regardless of whether an LLM or classifier is 99% confident, deterministic polic
 In high-risk scenarios, model confidence is irrelevant—the deterministic invariant always governs.
 
 ### 3. The Three Decision Paths + Silent-Failure Recovery
-Every incoming request routes into one of three tiers:
+Every incoming customer communication is evaluated and routed through one of three operational tiers:
 
-```
-                          [ Incoming Customer Email ]
-                                       │
-                                       ▼
-                         [ Signal & Policy Extraction ]
-                                       │
-            ┌──────────────────────────┼──────────────────────────┐
-            ▼                          ▼                          ▼
-     [ AUTONOMOUS ]               [ GUARDED ]                [ BLOCKED ]
-    (High Conf + Low Risk)   (Moderate Ambiguity)       (Hard Risk / Low Conf)
-            │                          │                          │
-   • Auto-Reply via Gmail     • Paused Pending Review    • Linear Ticket Created
-   • Resolution logged Slack  • Interactive Slack Alert           │
-                                                                  ▼
-                                                      [ Post-Action Verification ]
-                                                                  │
-                                                     ┌────────────┴────────────┐
-                                                     ▼                         ▼
-                                               [ VERIFIED ]          [ FAILED / SILENT DROP ]
-                                              • Link to Slack        • EMERGENCY RECOVERY
-                                                                     • Engineering Slack Alert
+```mermaid
+flowchart TD
+    A["Incoming Customer Email (Gmail IMAP)"] --> B["Signal & Policy Extraction"]
+    
+    B --> C["AUTONOMOUS<br/>(Confidence ≥ 0.90, Zero Flags)"]
+    B --> D["GUARDED<br/>(Confidence 0.70 - 0.89)"]
+    B --> E["BLOCKED<br/>(Hard Invariant / Low Confidence)"]
+    
+    C --> C1["Direct Reply via Gmail SMTP"]
+    C --> C2["Resolution Logged in Slack"]
+    
+    D --> D1["Execution Paused"]
+    D --> D2["Interactive Slack Approval Dispatch"]
+    
+    E --> E1["Escalation Issue Created in Linear"]
+    E1 --> F{"Post-Action State Verification"}
+    
+    F -->|"Ticket ID Confirmed"| G["Escalation Link Broadcast to Slack"]
+    F -->|"Missing ID / Empty Payload"| H["EMERGENCY RECOVERY CIRCUIT<br/>Direct On-Call Engineering Slack Alert"]
 ```
 
 * **AUTONOMOUS Tier**: Safe, high-confidence ($\ge 0.90$) actions with zero policy flags. Resolves immediately by dispatching an automated Gmail reply and confirming resolution in Slack.
 * **GUARDED Tier**: Requests falling in the moderate ambiguity band ($0.70 \le \text{confidence} < 0.90$). The action is paused and an approval request is dispatched to Slack with reasoning and confidence scores for human verification.
 * **BLOCKED Tier**: High-risk actions or low-confidence requests. Autonomous execution is prevented, an escalation issue is generated in Linear, and audit metadata is broadcast to Slack.
-* **Silent-Failure Fallback Recovery**: Autonomous agents frequently fail when downstream third-party APIs return a deceptive `200 OK` with an empty `{}` or dropped payload. Guardian implements **Post-Action State Verification**: it inspects the mutation response for an authentic ticket ID. If verification fails (or if silent failure is injected via `--simulate-failure`), Guardian triggers an immediate emergency fallback circuit, alerting the On-Call Engineering Slack channel directly.
+* **Silent-Failure Fallback Recovery**: Autonomous agents frequently fail when downstream third-party APIs return a deceptive `200 OK` with an empty `{}` or dropped payload. Guardian implements **Post-Action State Verification**: it inspects the mutation response for an authentic ticket ID. If verification fails (deliberately injected via `--simulate-failure` for testing), Guardian triggers an immediate emergency fallback circuit, alerting the On-Call Engineering Slack channel directly.
 
 ### 4. Real Multi-App Integration Testing
-AgentLens Guardian was not tested in mock sandboxes; it has been validated end-to-end against live, authenticated production endpoints:
+AgentLens Guardian was validated end-to-end against live Gmail, Slack, and Linear accounts. The silent-failure path is deliberately triggered via a `--simulate-failure` flag to demonstrate deterministic post-action verification and emergency fallback recovery:
 * **Gmail**: Live IMAP inbox search and SSL SMTP email dispatching with App Passwords.
 * **Slack**: Live bot authentication (`xoxb-`) and channel messaging (`chat:write`) via official `slack_sdk`.
 * **Linear**: Live GraphQL API issue creation with team UUID resolution via personal API keys.

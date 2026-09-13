@@ -389,6 +389,7 @@ def run_pipeline(
     simulate_linear_failure: bool = False,
     override_email: dict | None = None,
     subject_filter: str | None = None,
+    post_summary: bool = False,
 ):
     """
     Executes the full Guardian pipeline:
@@ -536,17 +537,21 @@ def run_pipeline(
     }
     log_decision(log_entry)
 
-    # Step 6: Post Cumulative Decision Summary to Slack
+    # Step 6: Post Cumulative Decision Summary to Slack (only if requested or POST_SUMMARY=true)
+    should_post_summary = post_summary or os.getenv("POST_SUMMARY", "false").lower() == "true"
     counts = get_decision_summary_counts()
-    summary_text = (
-        "📊 *AgentLens Guardian run summary*\n"
-        f"• *AUTONOMOUS:* {counts['AUTONOMOUS']}\n"
-        f"• *GUARDED:* {counts['GUARDED']}\n"
-        f"• *BLOCKED:* {counts['BLOCKED']}\n"
-        f"• *Silent failures recovered:* {counts['RECOVERED']}"
-    )
-    print("\n[STEP] Posting decision summary to Slack...")
-    post_slack_message(summary_text)
+    if should_post_summary:
+        summary_text = (
+            "📊 *AgentLens Guardian run summary*\n"
+            f"• *AUTONOMOUS:* {counts['AUTONOMOUS']}\n"
+            f"• *GUARDED:* {counts['GUARDED']}\n"
+            f"• *BLOCKED:* {counts['BLOCKED']}\n"
+            f"• *Silent failures recovered:* {counts['RECOVERED']}"
+        )
+        print("\n[STEP] Posting decision summary to Slack...")
+        post_slack_message(summary_text)
+    else:
+        print(f"[INFO] Decisions log updated (Totals -> AUTONOMOUS: {counts['AUTONOMOUS']}, GUARDED: {counts['GUARDED']}, BLOCKED: {counts['BLOCKED']}, RECOVERED: {counts['RECOVERED']}).")
 
     print("\n" + "=" * 80)
     print("                   Pipeline Execution Completed Successfully                    ")
@@ -567,9 +572,15 @@ if __name__ == "__main__":
         default=None,
         help="Target a specific unread email by subject keyword (e.g. --subject 'Order delayed')",
     )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Post cumulative decision summary card to Slack at the end of the run",
+    )
     args = parser.parse_args()
 
     run_pipeline(
         simulate_linear_failure=args.simulate_failure,
         subject_filter=args.subject,
+        post_summary=args.summary,
     )
